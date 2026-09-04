@@ -1,0 +1,592 @@
+<title>資料DLダッシュボード</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;
+    --series-1-wash:  rgba(42,120,214,0.10);
+    --status-critical:#d03b3b;
+    --success-text:   #006300;
+    --card-radius:    12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-1-wash:  rgba(57,135,229,0.14);
+      --status-critical:#e66767;
+      --success-text:   #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-1-wash:  rgba(57,135,229,0.14);
+    --status-critical:#e66767;
+    --success-text:   #0ca30c;
+  }
+
+  .viz-root {
+    background: var(--page-plane);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100%;
+    padding: 32px 20px 56px;
+    box-sizing: border-box;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .page-head { margin-bottom: 24px; }
+  .page-head h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; }
+  .page-head p { font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.6; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 20px 22px 22px;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+  }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 720px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--card-radius); padding: 16px 18px; box-sizing: border-box; }
+  .kpi .label { font-size: 12px; color: var(--text-secondary); margin: 0 0 8px; }
+  .kpi .value { font-size: 28px; font-weight: 700; line-height: 1; margin: 0 0 8px; font-variant-numeric: proportional-nums; }
+  .kpi .value .unit { font-size: 14px; font-weight: 600; }
+  .kpi .delta { font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .kpi .delta.down { color: var(--status-critical); }
+  .kpi .delta.up { color: var(--success-text); }
+  .kpi .sub { font-size: 12px; color: var(--text-muted); }
+
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; flex-wrap: wrap; gap: 8px; }
+  .card-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
+  .card-head .hint { font-size: 12px; color: var(--text-muted); }
+  .toggle-btn {
+    font-size: 12px; color: var(--text-secondary); background: transparent;
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-family: inherit;
+  }
+  .toggle-btn:hover { background: var(--series-1-wash); color: var(--text-primary); }
+
+  .chart-area { position: relative; margin-top: 12px; }
+  svg text { fill: var(--text-muted); font-size: 11px; font-family: inherit; }
+  .axis-line { stroke: var(--baseline); stroke-width: 1; }
+  .grid-line { stroke: var(--gridline); stroke-width: 1; }
+  .bar { fill: var(--series-1); rx: 4; }
+  .bar:hover, .bar.hover { fill: var(--series-1); opacity: 0.82; }
+  .bar-hit { fill: transparent; cursor: pointer; }
+  .bar-label { fill: var(--text-primary); font-size: 11px; font-weight: 600; }
+  .x-label { fill: var(--text-muted); font-size: 10px; }
+
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 12px; padding: 6px 10px; border-radius: 6px; line-height: 1.5; white-space: nowrap;
+    transform: translate(-50%, -100%); opacity: 0; transition: opacity 0.08s ease; z-index: 5;
+  }
+  .tooltip .t-val { font-weight: 700; }
+  .tooltip.show { opacity: 1; }
+
+  .mat-list { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .mat-row { display: grid; grid-template-columns: 200px 1fr 52px; align-items: center; gap: 10px; }
+  @media (max-width: 640px) {
+    .mat-row { grid-template-columns: 108px 1fr 44px; }
+  }
+  .mat-name { font-size: 12.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mat-track { position: relative; height: 22px; background: var(--gridline); border-radius: 4px; overflow: hidden; }
+  .mat-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--series-1); border-radius: 4px; min-width: 4px; }
+  .mat-val { font-size: 12.5px; font-weight: 600; color: var(--text-primary); text-align: right; font-variant-numeric: tabular-nums; }
+
+  .insight { font-size: 12.5px; color: var(--text-secondary); margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--gridline); line-height: 1.7; }
+  .insight b { color: var(--text-primary); }
+
+  table.data-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12.5px; }
+  table.data-table th, table.data-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--gridline); }
+  table.data-table th { color: var(--text-muted); font-weight: 600; }
+  table.data-table td.num, table.data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .hidden { display: none; }
+
+  .footnote { font-size: 11.5px; color: var(--text-muted); line-height: 1.8; margin-top: 6px; }
+</style>
+
+<div class="viz-root">
+  <div class="wrap">
+    <div class="page-head">
+      <h1>資料ダウンロード実績ダッシュボード</h1>
+      <p id="page-subtitle">集計中...</p>
+    </div>
+
+    <div class="kpi-row" id="kpi-row"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>月別ダウンロード数の推移</h2>
+        <button class="toggle-btn" id="toggle-monthly" type="button">表で見る</button>
+      </div>
+      <p class="hint" id="monthly-hint"></p>
+      <div class="chart-area" id="monthly-chart-area">
+        <svg id="monthly-svg" viewBox="0 0 920 300" width="100%" role="img" aria-label="月別ダウンロード数の推移"></svg>
+        <div class="tooltip" id="monthly-tooltip"></div>
+      </div>
+      <table class="data-table hidden" id="monthly-table">
+        <thead><tr><th>月</th><th class="num">ダウンロード数</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>資料別ダウンロード数ランキング</h2>
+        <button class="toggle-btn" id="toggle-materials" type="button">表で見る</button>
+      </div>
+      <p class="hint">累計・全期間</p>
+      <div class="mat-list" id="mat-list"></div>
+      <table class="data-table hidden" id="materials-table">
+        <thead><tr><th>資料タイトル</th><th class="num">ダウンロード数</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="insight" id="mat-insight"></div>
+    </div>
+
+    <p class="footnote" id="footnote"></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  /* ===== DATA_START =====
+     このブロックは render_dashboard_html.py が dashboard_data.json の内容で自動的に差し替える。
+     手動で編集しない。
+  */
+  var DATA = {
+  "asOfDate": "2026年9月4日",
+  "monthly": [
+    {
+      "ym": "2025-07",
+      "label": "25/7",
+      "count": 12,
+      "rows": 10
+    },
+    {
+      "ym": "2025-08",
+      "label": "25/8",
+      "count": 38,
+      "rows": 29
+    },
+    {
+      "ym": "2025-09",
+      "label": "25/9",
+      "count": 59,
+      "rows": 47
+    },
+    {
+      "ym": "2025-10",
+      "label": "25/10",
+      "count": 93,
+      "rows": 90
+    },
+    {
+      "ym": "2025-11",
+      "label": "25/11",
+      "count": 89,
+      "rows": 84
+    },
+    {
+      "ym": "2025-12",
+      "label": "25/12",
+      "count": 97,
+      "rows": 85
+    },
+    {
+      "ym": "2026-01",
+      "label": "26/1",
+      "count": 77,
+      "rows": 71
+    },
+    {
+      "ym": "2026-02",
+      "label": "26/2",
+      "count": 59,
+      "rows": 58
+    },
+    {
+      "ym": "2026-03",
+      "label": "26/3",
+      "count": 91,
+      "rows": 82
+    },
+    {
+      "ym": "2026-04",
+      "label": "26/4",
+      "count": 36,
+      "rows": 35
+    },
+    {
+      "ym": "2026-05",
+      "label": "26/5",
+      "count": 40,
+      "rows": 34
+    },
+    {
+      "ym": "2026-06",
+      "label": "26/6",
+      "count": 52,
+      "rows": 52
+    },
+    {
+      "ym": "2026-07",
+      "label": "26/7",
+      "count": 43,
+      "rows": 43
+    },
+    {
+      "ym": "2026-08",
+      "label": "26/8",
+      "count": 19,
+      "rows": 19
+    },
+    {
+      "ym": "2026-09",
+      "label": "26/9",
+      "count": 2,
+      "rows": 2
+    }
+  ],
+  "materials": [
+    {
+      "name": "安全訓練で使えるネタ12選【無料ダウンロード】",
+      "count": 619
+    },
+    {
+      "name": "創意工夫加点対策おすすめツール【無料ダウンロード】",
+      "count": 49
+    },
+    {
+      "name": "新規入場者実施報告書テンプレート【無料ダウンロード】",
+      "count": 38
+    },
+    {
+      "name": "熱中症に関する健康状態チェックシート【無料ダウンロード】",
+      "count": 34
+    },
+    {
+      "name": "建設業の生産性向上おすすめツール10選【無料ダウンロード】",
+      "count": 19
+    },
+    {
+      "name": "アルコールチェック記録簿フォーマット【無料ダウンロード】",
+      "count": 19
+    },
+    {
+      "name": "ISO9001・ISO14001要求事項比較表【無料ダウンロード】",
+      "count": 13
+    },
+    {
+      "name": "土木業特化AI-Civil AIサテライト【無料資料ダウンロード】",
+      "count": 8
+    },
+    {
+      "name": "土木現場でそのまま使える【AIプロンプト5選】",
+      "count": 6
+    },
+    {
+      "name": "安全訓練で使えるネタ12選",
+      "count": 3
+    },
+    {
+      "name": "熱中症に関する健康状態チェックシート",
+      "count": 1
+    }
+  ],
+  "unprocessedCount": 246,
+  "unprocessedSinceLabel": "2026年3月10日"
+};
+  /* ===== DATA_END ===== */
+
+  function ymToJa(ym) {
+    var p = ym.split("-");
+    return p[0] + "年" + parseInt(p[1], 10) + "月";
+  }
+
+  function renderHeadAndKpis() {
+    var monthly = DATA.monthly;
+    var materials = DATA.materials;
+    var first = monthly[0], last = monthly[monthly.length - 1], prev = monthly[monthly.length - 2];
+
+    var totalDownloads = monthly.reduce(function (s, m) { return s + m.count; }, 0);
+    var totalRows = monthly.reduce(function (s, m) { return s + (m.rows || 0); }, 0);
+    var monthAvg = Math.round(totalDownloads / monthly.length);
+    var deltaPct = prev ? ((last.count - prev.count) / prev.count * 100) : 0;
+    var deltaDir = deltaPct < 0 ? "down" : "up";
+    var deltaArrow = deltaPct < 0 ? "▼" : "▲";
+
+    document.getElementById("page-subtitle").textContent =
+      "集計対象:「SEOWP結果」フォーム送信記録　/　対象期間 " + ymToJa(first.ym) + "〜" + ymToJa(last.ym) +
+      "（" + monthly.length + "ヶ月）　/　集計基準日 " + DATA.asOfDate;
+
+    var kpis = [
+      {label: "累計ダウンロード数（のべ）", value: totalDownloads, unit: "件", sub: "資料単位でカウント"},
+      {label: "フォーム送信件数", value: totalRows, unit: "件", sub: "1送信で複数資料DLの場合あり"},
+      {label: "月平均ダウンロード数", value: monthAvg, unit: "件/月", sub: monthly.length + "ヶ月の平均"},
+      {label: "直近月（" + ymToJa(last.ym) + "）", value: last.count, unit: "件",
+        deltaHtml: prev ? (deltaArrow + " 前月比 " + Math.abs(deltaPct).toFixed(1) + "%" + (deltaPct < 0 ? "減" : "増") +
+          "（" + prev.count + "件→" + last.count + "件）") : null, deltaDir: deltaDir}
+    ];
+
+    var row = document.getElementById("kpi-row");
+    kpis.forEach(function (k) {
+      var card = document.createElement("div");
+      card.className = "kpi";
+      var label = document.createElement("p");
+      label.className = "label";
+      label.textContent = k.label;
+      var value = document.createElement("p");
+      value.className = "value";
+      value.textContent = k.value;
+      var unit = document.createElement("span");
+      unit.className = "unit";
+      unit.textContent = k.unit;
+      value.appendChild(unit);
+      card.appendChild(label);
+      card.appendChild(value);
+      if (k.deltaHtml) {
+        var delta = document.createElement("p");
+        delta.className = "delta " + k.deltaDir;
+        delta.textContent = k.deltaHtml;
+        card.appendChild(delta);
+      }
+      if (k.sub) {
+        var sub = document.createElement("p");
+        sub.className = "sub";
+        sub.textContent = k.sub;
+        card.appendChild(sub);
+      }
+      row.appendChild(card);
+    });
+
+    document.getElementById("monthly-hint").textContent = ymToJa(first.ym) + "〜" + ymToJa(last.ym);
+
+    var top = materials[0];
+    var topPct = (top.count / totalDownloads * 100).toFixed(0);
+    var second = materials[1];
+    var insight = document.getElementById("mat-insight");
+    var b = document.createElement("b");
+    b.textContent = "「" + top.name + "」";
+    insight.appendChild(b);
+    insight.appendChild(document.createTextNode(
+      "が全ダウンロードの約" + topPct + "%（" + top.count + "件/" + totalDownloads + "件）を占め、突出して人気。" +
+      (second ? "次点は「" + second.name + "」（" + second.count + "件）。" : "")
+    ));
+
+    var foot = document.getElementById("footnote");
+    if (DATA.unprocessedCount > 0) {
+      foot.textContent = "※ このシートには、対応記録（対応日・ステータス等）が未入力の行が" + DATA.unprocessedCount +
+        "件あります（" + DATA.unprocessedSinceLabel + "以降）。フォーム送信数・DL数の集計には含めていますが、架電対応の進捗は別途ご確認ください。";
+    }
+  }
+
+  var NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function niceCeiling(v) {
+    if (v <= 10) return 10;
+    var mag = Math.pow(10, Math.floor(Math.log10(v)));
+    var steps = [1, 2, 2.5, 5, 10];
+    for (var i = 0; i < steps.length; i++) {
+      var cand = steps[i] * mag;
+      if (cand >= v) return cand;
+    }
+    return mag * 10;
+  }
+
+  function renderMonthlyChart() {
+    var monthly = DATA.monthly;
+    var monthNameJa = {};
+    monthly.forEach(function (m) { monthNameJa[m.ym] = ymToJa(m.ym); });
+
+    var svg = document.getElementById("monthly-svg");
+    var W = 920, H = 300;
+    var padL = 34, padR = 10, padT = 20, padB = 34;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var dataMax = monthly.reduce(function (m, x) { return Math.max(m, x.count); }, 0);
+    var maxVal = niceCeiling(dataMax);
+    var step = maxVal / 4;
+    var ticks = [0, step, step * 2, step * 3, maxVal].map(function (v) { return Math.round(v); });
+
+    ticks.forEach(function (t) {
+      var y = padT + plotH - (t / maxVal) * plotH;
+      var line = el("line", {x1: padL, x2: W - padR, y1: y, y2: y, class: t === 0 ? "axis-line" : "grid-line"});
+      svg.appendChild(line);
+      var label = el("text", {x: padL - 8, y: y + 4, "text-anchor": "end"});
+      label.textContent = t;
+      svg.appendChild(label);
+    });
+
+    var n = monthly.length;
+    var band = plotW / n;
+    var barW = Math.min(24, band * 0.55);
+    var maxIdx = 0;
+    monthly.forEach(function (m, i) { if (m.count > monthly[maxIdx].count) maxIdx = i; });
+
+    var tooltip = document.getElementById("monthly-tooltip");
+    var chartArea = document.getElementById("monthly-chart-area");
+
+    monthly.forEach(function (m, i) {
+      var cx = padL + band * i + band / 2;
+      var barH = (m.count / maxVal) * plotH;
+      var y = padT + plotH - barH;
+
+      var hit = el("rect", {x: cx - band / 2, y: padT, width: band, height: plotH, class: "bar-hit"});
+      var bar = el("rect", {x: cx - barW / 2, y: y, width: barW, height: Math.max(barH, 1), rx: 4, class: "bar"});
+      svg.appendChild(bar);
+      svg.appendChild(hit);
+
+      if (i === maxIdx || i === n - 1) {
+        var lbl = el("text", {x: cx, y: y - 6, "text-anchor": "middle", class: "bar-label"});
+        lbl.textContent = m.count;
+        svg.appendChild(lbl);
+      }
+
+      var xl = el("text", {x: cx, y: H - padB + 16, "text-anchor": "middle", class: "x-label"});
+      xl.textContent = m.label;
+      svg.appendChild(xl);
+
+      function showTip() {
+        bar.classList.add("hover");
+        var rect = chartArea.getBoundingClientRect();
+        var svgRect = svg.getBoundingClientRect();
+        var scaleX = svgRect.width / W;
+        var px = svgRect.left - rect.left + cx * scaleX;
+        var py = svgRect.top - rect.top + y * (svgRect.height / H);
+        tooltip.innerHTML = "";
+        tooltip.appendChild(document.createTextNode(monthNameJa[m.ym]));
+        tooltip.appendChild(document.createElement("br"));
+        var strong = document.createElement("span");
+        strong.className = "t-val";
+        strong.textContent = m.count + " 件";
+        tooltip.appendChild(strong);
+        tooltip.style.left = px + "px";
+        tooltip.style.top = (py - 8) + "px";
+        tooltip.classList.add("show");
+      }
+      function hideTip() {
+        bar.classList.remove("hover");
+        tooltip.classList.remove("show");
+      }
+      hit.addEventListener("pointerenter", showTip);
+      hit.addEventListener("pointermove", showTip);
+      hit.addEventListener("pointerleave", hideTip);
+      hit.addEventListener("focus", showTip);
+      hit.addEventListener("blur", hideTip);
+      hit.setAttribute("tabindex", "0");
+    });
+
+    var tbody = document.querySelector("#monthly-table tbody");
+    monthly.forEach(function (m) {
+      var tr = document.createElement("tr");
+      var td1 = document.createElement("td");
+      td1.textContent = monthNameJa[m.ym];
+      var td2 = document.createElement("td");
+      td2.className = "num";
+      td2.textContent = m.count;
+      tr.appendChild(td1); tr.appendChild(td2);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderMaterials() {
+    var materials = DATA.materials;
+    var list = document.getElementById("mat-list");
+    var maxVal = materials[0].count;
+    materials.forEach(function (m) {
+      var row = document.createElement("div");
+      row.className = "mat-row";
+
+      var name = document.createElement("div");
+      name.className = "mat-name";
+      name.textContent = m.name;
+      name.title = m.name;
+
+      var track = document.createElement("div");
+      track.className = "mat-track";
+      var fill = document.createElement("div");
+      fill.className = "mat-fill";
+      fill.style.width = Math.max((m.count / maxVal) * 100, 1) + "%";
+      track.appendChild(fill);
+
+      var val = document.createElement("div");
+      val.className = "mat-val";
+      val.textContent = m.count;
+
+      row.appendChild(name); row.appendChild(track); row.appendChild(val);
+      list.appendChild(row);
+    });
+
+    var tbody = document.querySelector("#materials-table tbody");
+    materials.forEach(function (m) {
+      var tr = document.createElement("tr");
+      var td1 = document.createElement("td");
+      td1.textContent = m.name;
+      var td2 = document.createElement("td");
+      td2.className = "num";
+      td2.textContent = m.count;
+      tr.appendChild(td1); tr.appendChild(td2);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function wireToggle(btnId, chartId, tableId) {
+    var btn = document.getElementById(btnId);
+    var chart = document.getElementById(chartId);
+    var table = document.getElementById(tableId);
+    var showingTable = false;
+    btn.addEventListener("click", function () {
+      showingTable = !showingTable;
+      chart.classList.toggle("hidden", showingTable);
+      table.classList.toggle("hidden", !showingTable);
+      btn.textContent = showingTable ? "グラフで見る" : "表で見る";
+    });
+  }
+
+  renderHeadAndKpis();
+  renderMonthlyChart();
+  renderMaterials();
+  wireToggle("toggle-monthly", "monthly-chart-area", "monthly-table");
+  wireToggle("toggle-materials", "mat-list", "materials-table");
+})();
+</script>
